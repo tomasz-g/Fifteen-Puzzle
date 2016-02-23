@@ -1,0 +1,621 @@
+"""
+Loyd's Fifteen Puzzle - solver and visualizer
+
+-TG 13/08/2015(modifed oct/2015)
+
+-project for PoC course by Rice University
+https://www.coursera.org/course/principlescomputing2
+"""
+
+import random
+import simplegui
+
+#grid size
+GRID_SIZE = 4
+
+"""
+GUI for the Fifteen puzzle
+"""
+
+# constants
+TILE_SIZE = 60
+
+class FifteenGUI:
+    """
+    Main GUI class
+    """
+
+    def __init__(self, puzzle):
+        """
+        Create frame and timers, register event handlers
+        """
+        self._puzzle = puzzle
+        self._puzzle_height = puzzle.get_height()
+        self._puzzle_width = puzzle.get_width()
+        
+        if (self._puzzle_height * TILE_SIZE) < 180:
+            self._frame = simplegui.create_frame("The Fifteen puzzle",
+                                                 self._puzzle_width * TILE_SIZE,
+                                                 180)
+            self._frame.set_canvas_background("Blue")
+        else:
+            self._frame = simplegui.create_frame("The Fifteen puzzle",
+                                                 self._puzzle_width * TILE_SIZE,
+                                                 self._puzzle_height * TILE_SIZE)
+        self._solution = ""
+        self._current_moves = ""
+        self._frame.add_input("Enter moves and hit enter:", self.enter_moves, 120)
+        self._frame.add_button("Solve", self.solve, 120)
+        self._frame.add_button("Shuffle Puzzle", self.shuffle_puzzle, 120)
+        self._frame.add_label("", 120)
+        self._frame.add_label("valid keys for moves:", 150)
+        self._frame.add_label("up: 'u'", 150)
+        self._frame.add_label("down: 'd'", 150)
+        self._frame.add_label("left: 'l'", 150)
+        self._frame.add_label("right: 'r'", 150)
+        self._frame.set_draw_handler(self.draw)
+        self._frame.set_keydown_handler(self.keydown)
+        self._timer = simplegui.create_timer(250, self.tick)
+        self._timer.start()
+        self._frame.start()
+
+    def tick(self):
+        """
+        Timer for incrementally displaying computed solution
+        """
+        if self._solution == "":
+            return
+        direction = self._solution[0]
+        self._solution = self._solution[1:]
+        try:
+            self._puzzle.update_puzzle(direction)
+        except:
+            print "invalid move:", direction
+
+    def solve(self):
+        """
+        Event handler to generate solution string for given configuration
+        """
+        new_puzzle = self._puzzle.clone()
+        self._solution = new_puzzle.solve_puzzle()
+
+    def print_moves(self):
+        """
+        Event handler to print and reset current move string
+        """
+        print self._current_moves
+        self._current_moves = ""
+
+    def enter_moves(self, txt):
+        """
+        Event handler to enter move string
+        """
+        self._solution = txt.strip().lower()
+        
+    def shuffle_puzzle(self):
+        """
+        Event handler to shuffle puzzle
+        """
+        self._puzzle.shuffle()
+
+    def keydown(self, key):
+        """
+        Keydown handler that allows updates of puzzle using arrow keys
+        """
+        if key == simplegui.KEY_MAP["up"]:
+            try:
+                self._puzzle.update_puzzle("u")
+                self._current_moves += "u"
+            except:
+                print "invalid move: up"
+        elif key == simplegui.KEY_MAP["down"]:
+            try:
+                self._puzzle.update_puzzle("d")
+                self._current_moves += "d"
+            except:
+                print "invalid move: down"
+        elif key == simplegui.KEY_MAP["left"]:
+            try:
+                self._puzzle.update_puzzle("l")
+                self._current_moves += "l"
+            except:
+                print "invalid move: left"
+        elif key == simplegui.KEY_MAP["right"]:
+            try:
+                self._puzzle.update_puzzle("r")
+                self._current_moves += "r"
+            except:
+                print "invalid move: right"
+
+    def draw(self, canvas):
+        """
+        Draw the puzzle
+        """
+        for row in range(self._puzzle_height):
+            for col in range(self._puzzle_width):
+                tile_num = self._puzzle.get_number(row, col)
+                if tile_num == 0:
+                    background = "rgb(128, 128, 255)"
+                else:
+                    background = "Blue"
+                tile = [[col * TILE_SIZE, row * TILE_SIZE],
+                        [(col + 1) * TILE_SIZE, row * TILE_SIZE],
+                        [(col + 1) * TILE_SIZE, (row + 1) * TILE_SIZE],
+                        [col * TILE_SIZE, (row + 1) * TILE_SIZE]]
+                canvas.draw_polygon(tile, 1, "White", background)
+                canvas.draw_text(str(tile_num),
+                                 [(col + .2) * TILE_SIZE,
+                                  (row + 0.8) * TILE_SIZE],
+                                 2 *  TILE_SIZE // 3, "White")
+
+
+
+class Puzzle:
+    """
+    Class representation for the Fifteen puzzle
+    """
+
+    def __init__(self, puzzle_height, puzzle_width, initial_grid=None):
+        """
+        Initialize puzzle with default height and width
+        Returns a Puzzle object
+        """
+        self._height = puzzle_height
+        self._width = puzzle_width
+        self._grid = [[col + puzzle_width * row
+                       for col in range(self._width)]
+                      for row in range(self._height)]
+
+        if initial_grid != None:
+            for row in range(puzzle_height):
+                for col in range(puzzle_width):
+                    self._grid[row][col] = initial_grid[row][col]
+
+    def __str__(self):
+        """
+        Generate string representaion for puzzle
+        Returns a string
+        """
+        ans = ""
+        for row in range(self._height):
+            ans += str(self._grid[row])
+            ans += "\n"
+        return ans
+
+    #####################################
+    # GUI methods
+
+    def get_height(self):
+        """
+        Getter for puzzle height
+        Returns an integer
+        """
+        return self._height
+
+    def get_width(self):
+        """
+        Getter for puzzle width
+        Returns an integer
+        """
+        return self._width
+
+    def get_number(self, row, col):
+        """
+        Getter for the number at tile position pos
+        Returns an integer
+        """
+        return self._grid[row][col]
+
+    def set_number(self, row, col, value):
+        """
+        Setter for the number at tile position pos
+        """
+        self._grid[row][col] = value
+
+    def clone(self):
+        """
+        Make a copy of the puzzle to update during solving
+        Returns a Puzzle object
+        """
+        new_puzzle = Puzzle(self._height, self._width, self._grid)
+        return new_puzzle
+    
+    def shuffle(self):
+        """
+        Randomly shuffle the puzzle
+        """
+        temp_grid = range(self._height * self._width)
+        random.shuffle(temp_grid)
+        
+        for value in range(len(temp_grid)):
+            self.set_number(((value / self._width) % self._width), \
+                            (value % self._height), temp_grid[value])
+            
+    ########################################################
+    # Core puzzle methods
+
+    def current_position(self, solved_row, solved_col):
+        """
+        Locate the current position of the tile that will be at
+        position (solved_row, solved_col) when the puzzle is solved
+        Returns a tuple of two integers        
+        """
+        solved_value = (solved_col + self._width * solved_row)
+
+        for row in range(self._height):
+            for col in range(self._width):
+                if self._grid[row][col] == solved_value:
+                    return (row, col)
+        assert False, "Value " + str(solved_value) + " not found"
+
+    def update_puzzle(self, move_string):
+        """
+        Updates the puzzle state based on the provided move string
+        """
+        zero_row, zero_col = self.current_position(0, 0)
+        for direction in move_string:
+            if direction == "l":
+                assert zero_col > 0, "move off grid: " + direction
+                self._grid[zero_row][zero_col] = self._grid[zero_row][zero_col - 1]
+                self._grid[zero_row][zero_col - 1] = 0
+                zero_col -= 1
+            elif direction == "r":
+                assert zero_col < self._width - 1, "move off grid: " + direction
+                self._grid[zero_row][zero_col] = self._grid[zero_row][zero_col + 1]
+                self._grid[zero_row][zero_col + 1] = 0
+                zero_col += 1
+            elif direction == "u":
+                assert zero_row > 0, "move off grid: " + direction
+                self._grid[zero_row][zero_col] = self._grid[zero_row - 1][zero_col]
+                self._grid[zero_row - 1][zero_col] = 0
+                zero_row -= 1
+            elif direction == "d":
+                assert zero_row < self._height - 1, "move off grid: " + direction
+                self._grid[zero_row][zero_col] = self._grid[zero_row + 1][zero_col]
+                self._grid[zero_row + 1][zero_col] = 0
+                zero_row += 1
+            else:
+                assert False, "invalid direction: " + direction
+
+    ##################################################################
+    # Phase one methods
+
+    def lower_row_invariant(self, target_row, target_col):
+        """
+        Check whether the puzzle satisfies the specified invariant
+        at the given position in the bottom rows of the puzzle (target_row > 1)
+        Returns a boolean
+        """
+        if self.get_number(target_row, target_col) != 0:
+            return False
+        
+        for tile_row in range((target_row + 1), self._height):
+            for tile_col in range(self._width):
+                if self.current_position(tile_row, tile_col) != (tile_row, tile_col):
+                    return False
+                
+        for tile_col in range((target_col + 1), self._width):
+            if self.current_position(target_row, tile_col) != (target_row, tile_col):
+                return False
+            
+        return True
+        
+        
+    def solve_interior_tile(self, target_row, target_col):
+        """
+        Place correct tile at target position
+        Updates puzzle and returns a move string
+        """
+        assert self.lower_row_invariant(target_row, target_col), "SIT sort 0 or/and greater tile/s first" 
+        
+        total_moves = ""
+        moves = ""
+        
+        total_moves += "u" * (target_row - self.current_position(target_row, target_col)[0])
+        self.update_puzzle(total_moves)
+        
+        if self.current_position(0, 0)[0] != self.current_position(target_row, target_col)[0]:
+            self.update_puzzle("ld")
+            total_moves += "ld"
+        else:
+            moves += "l" * (target_col - self.current_position(target_row, target_col)[1])
+            moves += "r" * ((self.current_position(target_row, target_col)[1] -1) - target_col)
+            self.update_puzzle(moves)
+            total_moves += moves
+            moves = ""
+            
+        while self.current_position(target_row, target_col)[1] != target_col:
+            horizontal_move = "ud"
+            if self.current_position(target_row, target_col)[0] == 0:
+                horizontal_move = "du"
+            if self.current_position(target_row, target_col)[1] > target_col:
+                moves += ("r" + horizontal_move[0] + "ll" + horizontal_move[1])
+            else:
+                moves += (horizontal_move[0] + "rr" + horizontal_move[1] + "l")
+            
+            self.update_puzzle(moves)
+            total_moves += moves
+            moves = ""
+                
+        while self.current_position(target_row, target_col)[0] != target_row:
+            moves += "druld"
+            self.update_puzzle(moves)
+            total_moves += moves
+            moves = ""
+            
+        return total_moves
+
+            
+    def solve_col0_tile(self, target_row):
+        """
+        Solve tile in column zero on specified row (> 1)
+        Updates puzzle and returns a move string
+        """
+        assert self.lower_row_invariant(target_row, 0), "col0 sort 0 or/and greater tile/s first" 
+      
+        total_moves = ""
+        moves = ""
+        
+        total_moves += "u" * (target_row - self.current_position(target_row, 0)[0])
+        self.update_puzzle(total_moves)
+        
+        if self.current_position(target_row, 0) == (target_row, 0):
+            moves += "r" * (self._width -1)
+            total_moves += moves
+            self.update_puzzle(moves)
+            return total_moves
+        elif self.current_position(0, 0)[0] != self.current_position(target_row, 0)[0]:
+            moves += "rdl"
+            self.update_puzzle(moves)
+            total_moves += moves
+            moves = ""
+        else:
+            moves += "r" * (self.current_position(target_row, 0)[1] -1)
+            self.update_puzzle(moves)
+            total_moves += moves
+            moves = ""
+            
+        while self.current_position(target_row, 0)[1] != 1:
+            horizontal_move = "ud"
+            if self.current_position(target_row, 0)[0] == 0:
+                horizontal_move = "du"
+            moves += ("r" + horizontal_move[0] + "ll" + horizontal_move[1])
+            self.update_puzzle(moves)
+            total_moves += moves
+            moves = ""
+            
+        while self.current_position(target_row, 0)[0] != (target_row -1):
+            moves += "druld"
+            self.update_puzzle(moves)
+            total_moves += moves
+            moves = ""
+            
+        moves += "ruldrdlurdluurddlur"
+        moves += "r" * (self.get_width() -2)
+        self.update_puzzle(moves)
+        total_moves += moves
+        
+        return total_moves
+
+    #############################################################
+    # Phase two methods
+
+    def row0_invariant(self, target_col):
+        """
+        Check whether the puzzle satisfies the row zero invariant
+        at the given column (col > 1)
+        Returns a boolean
+        """
+#        assert self.lower_row_invariant(0, target_col), False 
+        
+        if self.get_number(0, target_col) != 0:
+            return False
+        
+        for tile_col in range((target_col + 1), self._width):
+            if self.current_position(0, tile_col) != (0, tile_col):
+                return False
+            
+        for tile_col in range(target_col, self._width):
+            if self.current_position(1, tile_col) != (1, tile_col):
+                return False
+            
+        for tile_row in range(2, self._height):
+            for tile_col in range(self._width):
+                if self.current_position(tile_row, tile_col) != (tile_row, tile_col):
+                    return False
+        return True
+
+    def row1_invariant(self, target_col):
+        """
+        Check whether the puzzle satisfies the row one invariant
+        at the given column (col > 1)
+        Returns a boolean
+        """        
+        if self.get_number(1, target_col) != 0:
+            return False
+        
+        for tile_row in range(2, self._height):
+            for tile_col in range(self._width):
+                if self.current_position(tile_row, tile_col) != (tile_row, tile_col):
+                    return False
+                
+        for tile_col in range((target_col + 1), self._width):
+            if self.current_position(1, tile_col) != (1, tile_col):
+                return False
+            
+        return True
+
+    def solve_row0_tile(self, target_col):
+        """
+        Solve the tile in row zero at the specified column
+        Updates puzzle and returns a move string
+        """
+        assert self.row0_invariant(target_col), "row0 sort 0 or/and greater tile/s first" 
+        
+        total_moves = ""
+        
+        total_moves += "l" * (target_col - self.current_position(0, target_col)[1])
+        self.update_puzzle(total_moves)
+        if self.current_position(0, target_col) == (0, target_col):
+            self.update_puzzle("d")
+            total_moves += "d"
+            return total_moves
+        
+        if self.current_position(0, target_col)[0] == 0:
+            self.update_puzzle("druld")
+            total_moves += "druld"
+        else:
+            if self.current_position(0, target_col)[1] == 0:
+                self.update_puzzle("rdl")
+                total_moves += "rdl"
+            else:
+                self.update_puzzle("ld")
+                total_moves += "ld"
+            
+        while self.current_position(0, target_col)[1] != (target_col -1):
+            self.update_puzzle("urrdl")
+            total_moves += "urrdl"
+            
+        self.update_puzzle("urdlurrdluldrruld")
+        total_moves += "urdlurrdluldrruld"
+        return total_moves
+            
+
+    def solve_row1_tile(self, target_col):
+        """
+        Solve the tile in row one at the specified column
+        Updates puzzle and returns a move string
+        """
+        assert self.row1_invariant(target_col), "row1 sort 0 or/and greater tile/s first" 
+        
+        moves = ""
+        total_moves = ""
+        
+        if self.current_position(1, target_col)[0] != 1:
+            total_moves += "u" 
+            self.update_puzzle(total_moves)
+            if self.current_position(1, target_col) == (1, target_col):
+                return total_moves
+            
+        moves += "l" * (target_col - self.current_position(1, target_col)[1])
+        self.update_puzzle(moves)
+        total_moves += moves
+        moves = ""
+        if self.current_position(1, target_col) == (1, target_col):
+            self.update_puzzle("ur")
+            total_moves += "ur"
+            return total_moves 
+        
+        while self.current_position(1, target_col)[1] != target_col:
+            horizontal_move = "ud"
+            if self.current_position(1, target_col)[0] == 0:
+                horizontal_move = "du"
+            moves += (horizontal_move[0] + "rr" + horizontal_move[1] + "l")
+            self.update_puzzle(moves)
+            total_moves += moves
+            moves = ""
+            
+        if self.current_position(1, target_col) == (1, target_col):
+            self.update_puzzle("ur")
+            total_moves += "ur"
+            return total_moves
+        else:
+            self.update_puzzle("dru")
+            total_moves += "dru"
+            return total_moves
+        
+        
+    ###########################################################
+    # Phase 3 methods
+
+    def solve_2x2(self):
+        """
+        Solve the upper left 2x2 part of the puzzle
+        Updates the puzzle and returns a move string
+        """
+        total_moves = ""
+        moves = ""
+        possibility_check = [4, 4]
+        
+        if not (self.current_position(0, 0)[0]):
+            total_moves += "d"
+        if not (self.current_position(0, 0)[1]):
+            total_moves += "r"
+            
+        self.update_puzzle(total_moves)
+
+        assert self.row1_invariant(1), "2x2 sort greater tile/s first" 
+            
+        total_moves += "lu"
+        self.update_puzzle("lu")
+                
+        while not self.lower_row_invariant(0, 0) and possibility_check[0]:
+            moves += "rdlu"
+            self.update_puzzle(moves)
+            total_moves += moves
+            moves = ""       
+            possibility_check[0] -= 1
+            
+        while not self.lower_row_invariant(0, 0) and possibility_check[1]:
+            moves += "drul"
+            self.update_puzzle(moves)
+            total_moves += moves
+            moves = ""       
+            possibility_check[1] -= 1
+            
+        if possibility_check[0] == 0 and possibility_check[1] == 0:
+            print "2x2 puzzels can't be solved"
+            
+        return total_moves
+
+    def solve_puzzle(self):
+        """
+        Generate a solution string for a puzzle
+        Updates the puzzle and returns a move string
+        """
+        total_moves = ""
+        moves = ""
+        
+        if self.lower_row_invariant(0, 0):
+            return moves
+        else:
+            new_puzzle = self.clone()
+            for puzzle_row in range((self.get_height() - 1), 1, -1):
+                for puzzle_col in range((self.get_width() - 1), -1, -1):
+                    if new_puzzle.current_position(puzzle_row, puzzle_col) != \
+                    (puzzle_row, puzzle_col):
+                        zero_dist = new_puzzle.current_position(0, 0)
+                        moves += "r" * (puzzle_col - zero_dist[1])
+                        moves += "l" * (zero_dist[1] - puzzle_col)
+                        moves += "d" * (puzzle_row - zero_dist[0])
+                        new_puzzle.update_puzzle(moves)
+                        total_moves += moves
+                        moves = ""
+                        if puzzle_col > 0:
+                            total_moves += new_puzzle.solve_interior_tile(puzzle_row, puzzle_col)
+                        else:
+                            total_moves += new_puzzle.solve_col0_tile(puzzle_row)
+                            
+            for puzzle_col in range((self.get_width() - 1), 1, -1):
+                for puzzle_row in range(1, -1, -1):
+                    if new_puzzle.current_position(puzzle_row, puzzle_col) != \
+                    (puzzle_row, puzzle_col):
+                        zero_dist = new_puzzle.current_position(0, 0)
+                        moves += "r" * (puzzle_col - zero_dist[1])
+                        moves += "l" * (zero_dist[1] - puzzle_col)
+                        moves += "d" * (puzzle_row - zero_dist[0])
+                        new_puzzle.update_puzzle(moves)
+                        total_moves += moves
+                        moves = ""
+                        if puzzle_row > 0:
+                            total_moves += new_puzzle.solve_row1_tile(puzzle_col)
+                        else:
+                            total_moves += new_puzzle.solve_row0_tile(puzzle_col)
+
+            total_moves += new_puzzle.solve_2x2()
+        
+            self.update_puzzle(total_moves)
+            return total_moves       
+        
+# Start interactive simulation
+FifteenGUI(Puzzle(GRID_SIZE, GRID_SIZE))
